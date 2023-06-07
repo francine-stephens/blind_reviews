@@ -1,0 +1,956 @@
+---
+title: "Blind Reviews Contextual Research"
+author: "Francine Stephens"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+    theme: cerulean
+    highlight: tango
+---
+
+## Overview
+
+This script includes code to generate some graphs and tables to contextualize reviewers on Blind for Intuit and its competitors. These visuals are not always used in the VOE Council reporting, but may be used on a case-by-case basis. For the standard-reporting visuals, use the script *analyze_blind_reviews.Rmd.*  
+
+```{r setup, warning=FALSE, message=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+
+# Load Libraries
+libraries <- c("tidyverse",
+               "stringr",
+               "lubridate",
+               "ggplot2",
+               "ggrepel",
+               "gt",
+               "htmltools", 
+               "paletteer", 
+               "scales",
+               "sparkline"
+               
+)
+require(libraries)
+lapply(libraries, require, character.only = TRUE)
+
+## Set Paths
+wd <- getwd()
+output_path <- paste0(wd, "/research_outputs/")
+
+# Set Key-Parameters
+#### Dates ####
+## Update the start of month date & start of next month date
+month_start_reviews <- as.Date("2022-03-01")
+month_start_next_month <- as.Date("2022-04-01")
+
+## Set the date for Month Before Current Month you are analyzing
+month_previous_for_MOM_trend <- as.Date("2022-02-01")
+
+## Set the date for exactly 1 year ago to the current month (start of month)
+one_year_ago <- as.Date("2021-03-01")
+
+#### Visual Elements ####
+## Set the appropriate months for the line graphs
+MoM_ratings_trend_graphs_title <- "Monthly Blind Ratings: March 2021 - March 2022" 
+
+
+# Set Key Functions
+## Update the dates within the tick marks (i.e., ` `) to reflect the current month and last month
+compute_MOM_trend_for_table <- function(x) { 
+  x %>% 
+  mutate(Change = `2022-03-01` - `2022-02-01`) %>% # current month - last month
+  select(Category, Rating = `2022-03-01`, Change) # current month in the tick marks on this line
+    }
+
+
+## Import Data
+temp_rds <- list.files(pattern="*.rds")
+list2env(
+  lapply(setNames(temp_rds, make.names(gsub("*.rds$", "", temp_rds))), 
+         readRDS), envir = .GlobalEnv)
+
+```
+
+## Overview
+```{r reviews summary}
+summary(intuit_reviews)
+```
+
+## Number of Reviews per Month at Intuit
+
+```{r reviews per month graph}
+review_count_by_month <- intuit_reviews %>%
+  select(Month,
+         Year) %>% 
+  group_by(Month, Year) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(Month = as.character(Month),
+         Month = str_pad(Month,
+                         width = 2,
+                         side = "left"),
+         Year = as.character(Year),
+         Year_Month = str_c(Year, Month, sep = "-"),
+         Time = ym(Year_Month)) %>% 
+  arrange(Time) %>% 
+  select(-Month, -Year, -Year_Month) %>% 
+  relocate(Time, n) %>% 
+  rename(count = "n")
+  
+# Graph time trend
+ggplot(review_count_by_month, 
+       aes(x = Time, y = count)
+       ) + 
+  geom_point(size = 4, color = "#365ebf") +
+  geom_line(size = 1.25, color = "#365ebf") + 
+  scale_y_continuous(breaks = seq(10, 70, 10)) +
+  scale_x_date(#breaks = month_breaks, 
+               limits = as.Date(c("2020-05-01","2022-03-01")),
+               date_breaks = "3 months",
+               date_labels = "%b-%y") + 
+  labs(x = "Month-Year",
+       y = "Frequency",
+       title = "Monthly Blind Reviews for Intuit",
+       subtitle = "May 2020 to Present") + 
+  theme_classic(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(size = 16, hjust = 0.5),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15)
+)
+
+```
+
+```{r export MoM review counts}
+
+ggsave(path = output_path,
+       filename = "Ratings_count_per_month.png", width = 14)
+
+```
+
+
+## Former vs Current Employees
+
+```{r employee status}
+knitr::kable(intuit_reviews %>% 
+  group_by(emp_status) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(`%` = round((n/sum(n)) * 100, digits =0)) %>% 
+  rename(`Employment Status` = "emp_status"),
+  caption = "Employment Status of Intuit's Blind Reviewers")
+
+```
+
+
+## Job Titles of Reviewers on Blind {.tabset .tabset-pills}
+
+```{r job titles}
+knitr::kable(
+intuit_reviews %>% 
+  mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+         ) %>%
+  group_by(job_title) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(`%` = round((n/sum(n)) * 100, digits =0)) %>% 
+  arrange(-n),
+caption = "Intuit Job Titles (Not Cleaned, as-is titles)"
+)
+```
+
+**Use Functions to Group Job Titles in Job Communities**
+
+These are approximate groupings. 
+```{r job titles to communities}
+
+## functions for computing job communities
+count_pm_reviews <- function(x) { 
+  x %>% 
+  mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+filter(str_detect(job_title, "Product Manager") | 
+         str_detect(job_title, "Product Management")) %>% 
+  count() %>% 
+  mutate(title = "PM")
+}
+
+count_pd_reviews <- function(x) { 
+  x %>% 
+  mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+  filter(
+         str_detect(job_title, "Software ") |
+         str_detect(job_title, "Engineer")
+         )  %>% 
+  count() %>% 
+  mutate(title = "PD") 
+}
+
+count_design_reviews <- function(x){ 
+  x %>% 
+    mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+  filter(str_detect(job_title, "Designer") | str_detect(job_title, "UX"))  %>% 
+  count() %>% 
+  mutate(title = "Design")
+} 
+
+count_data_reviews <- function(x){ 
+  x %>% 
+  mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+  filter(str_detect(job_title, "Data Scientist") | str_detect(job_title, "Data Science") |
+           str_detect(job_title, "Data Analyst") | str_detect(job_title, "Data "))  %>% 
+  filter(!str_detect(job_title, "Data Engineer")) %>%
+  count() %>% 
+  mutate(title = "Data")
+  }
+
+count_marketing_reviews <- function(x){
+  x %>% 
+    mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+  filter(str_detect(job_title, "Marketing") | 
+           str_detect(job_title, "Communication"))  %>% 
+  count() %>% 
+  mutate(title = "Marketing")
+  
+}
+
+count_sales_reviews <- function(x){
+  x %>% 
+    mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+ filter(str_detect(job_title, "Sale") | str_detect(job_title, "Account") | 
+           str_detect(job_title, "Inside ") | str_detect(job_title, "Product Specialist")
+         ) %>% 
+  count() %>% 
+  mutate(title = "Sales")
+}
+
+count_finance_reviews <- function(x){
+  x %>% 
+    mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product")
+    ) %>% 
+  filter(str_detect(job_title, "Finance") | str_detect(job_title, "Financial"))  %>% 
+  count() %>% 
+  mutate(title = "Finance")
+}
+
+
+compute_job_communities <- function(y){
+  y %>% 
+     mutate(job_title = str_replace(job_title, "Busineess", "Business"),
+         job_title = str_replace(job_title, "Produce", "Product"),
+        community = case_when( 
+          str_detect(job_title, "Finance") ~ "Finance",
+          str_detect(job_title, "Financial") ~ "Finance",
+          str_detect(job_title, "Sale") ~ "Sales",
+          str_detect(job_title, "Account") ~ "Sales",
+          str_detect(job_title, "Inside ") ~ "Sales",
+          str_detect(job_title, "Product Specialist") ~ "Sales",
+          str_detect(job_title, "Customer") ~ "Sales",
+          str_detect(job_title, "Marketing") ~ "Marketing",
+          str_detect(job_title, "Communication") ~ "Marketing",
+          str_detect(job_title, "Data Scientist") ~ "Data",
+          str_detect(job_title, "Data Science") ~ "Data",
+          str_detect(job_title, "Data Analyst") ~ "Data",
+          str_detect(job_title, "Data ") ~ "Data",
+          str_detect(job_title, "Analytics") ~ "Data",
+          str_detect(job_title, "Scientist") ~ "Data",
+          str_detect(job_title, "Designer") ~ "Design",
+          str_detect(job_title, "UX") ~ "Design",
+          str_detect(job_title, "User Research") ~ "Design",
+          str_detect(job_title, "Software ") ~ "PD",
+          str_detect(job_title, "Engineer") ~ "PD",
+          str_detect(job_title, "Architect") ~ "PD",
+          str_detect(job_title, "Technician") ~ "PD",
+          str_detect(job_title, "Product Manager") ~ "PM",
+          str_detect(job_title, "Product Support Manager") ~ "PM",
+          str_detect(job_title, "Product Strategy Manager") ~ "PM",
+          str_detect(job_title, "Product Development") ~ "PM",
+          str_detect(job_title, "Product Operations") ~ "PM",
+          str_detect(job_title, "Product Analyst") ~ "PM",
+          str_detect(job_title, "Product Management") ~ "PM",
+          NA ~ "Not Assigned"
+          ),
+        community = replace_na(community, "Not Assigned")
+    ) %>% 
+  count(community) %>% 
+  mutate(`%` = round((n/sum(n)) * 100, digits = 0)) %>% 
+  arrange(`%`)
+}
+```
+
+### Compute Intuit's Reviewer Demographics by Job Community
+```{r intuit employee demographics}
+pm_ct <- intuit_reviews %>% 
+    count_pm_reviews()
+
+pd_ct <- intuit_reviews %>% 
+  count_pd_reviews()
+
+design_ct <-  intuit_reviews %>% 
+  count_design_reviews()
+
+data_ct <- intuit_reviews %>% 
+  count_data_reviews()
+
+marketing_ct <- intuit_reviews %>% 
+  count_marketing_reviews()
+
+sales_ct <- intuit_reviews %>% 
+    count_sales_reviews()
+
+finance_ct <- intuit_reviews %>% 
+    count_finance_reviews()
+
+knitr::kable(
+rbind(
+      pm_ct, 
+      pd_ct, 
+      design_ct,
+      data_ct, 
+      marketing_ct,
+      sales_ct,
+      finance_ct) %>% 
+  relocate(title, n) %>% 
+  mutate(`%` = round((n/715) * 100, digits = 0)) %>% 
+  arrange(-`%`),
+caption = "Intuit's Blind Reviewers by Job Community"
+)
+
+```
+
+
+### Tech vs. Non-Tech Reviewers at Intuit and Competitors
+```{r employee demographics Google}
+intuit_job_communities <- intuit_reviews %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Intuit")
+
+google_job_communities <- google %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Google")
+
+salesforce_job_communities <- salesforce %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Salesforce")
+
+microsoft_job_communities <- microsoft %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Microsoft")
+
+facebook_job_communities <- facebook %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Facebook")
+
+amazon_job_communities <- amazon %>% 
+  compute_job_communities() %>% 
+  mutate(Company = "Amazon")
+
+tech_community <- c("PM", "PD", "Data", "Design")
+
+tech_nontech_community_companies <- rbind(intuit_job_communities,
+      google_job_communities,
+      facebook_job_communities,
+      amazon_job_communities,
+      microsoft_job_communities,
+      salesforce_job_communities
+      ) %>% 
+  mutate(Community = if_else(community %in% tech_community,
+                             "Tech",
+                             "Non-Tech")
+         ) %>% 
+  group_by(Company, Community) %>% 
+  summarize(N = sum(n)) %>% 
+  mutate(`%` = round((N/sum(N)), digits = 2)) %>% 
+  ungroup() %>% 
+  mutate(Company = factor(Company, levels= c("Intuit",
+                                             "Google",
+                                             "Facebook",
+                                             "Amazon",
+                                             "Microsoft",
+                                             "Salesforce")),
+         label = (`%` * 100),
+         label = paste0(as.character(label), "%")
+         )
+
+
+ggplot(tech_nontech_community_companies,
+       aes(x=Company, y=`%`, fill= Community, label=label)) +
+  geom_col(position = position_fill(reverse = FALSE),
+           width=0.8, color="white") + 
+  geom_text(size = 4.5,
+            position = position_stack(vjust = 0.5),
+            color = "white",
+            fontface = "bold") +
+  scale_y_continuous(labels = scales::percent) + 
+  scale_fill_manual(values = c( "#FF9A76", "#679B9B"),
+                    name = ""
+                    ) + 
+  labs(title = "Reviews by Job Community",
+       y = "",
+       x = "",
+       caption = "Note: Job titles were grouped into communities") + 
+  guides(fill = guide_legend(title.position = "top",
+                             title.hjust = 0.5)) +
+  theme_classic() +
+  theme(
+    text = element_text(family = "AvenirNext forINTUIT"),
+    legend.position = "top",
+    legend.title = element_text(face = "bold"),
+    legend.text = element_text(size = 13),
+    plot.background = element_blank(),
+    axis.title.x = element_text(size = 16, face = "bold"),
+    axis.title.y = element_text(size = 16, face = "bold", hjust = 0.5),
+    axis.text.x = element_text(size = 16),
+    axis.text.y = element_text(size = 15, margin = margin(t = .3, unit = "cm")
+    ),
+    panel.grid.major.x = element_blank(), 
+    panel.grid.minor.x = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    plot.title = element_text(size = 18, face = "bold", hjust = 0.5),
+    strip.placement = "outside",
+    strip.text = element_text(face = "bold", size = 13)
+  )
+```
+
+```{r export tech community participation}
+ggsave(path = output_path,
+      filename = "Tech Community Participation.png", width = 14)
+```
+
+
+
+## MoM Ratings Company-Level Comparisons
+
+```{r avg rating per month}
+# Define function for MoM trend
+compute_ratings_over_time_for_company <- function(y) { 
+  y %>% 
+   select(Month,
+         Year,
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating) %>% 
+  group_by(Month, Year) %>% 
+  summarize(across(ends_with("_rating"), ~mean(.x, na.rm = TRUE))
+            ) %>% 
+  ungroup() %>% 
+  mutate(across(ends_with("_rating"), ~round(.x, digits = 1))) %>% 
+  mutate(Month = as.character(Month),
+         Month = str_pad(Month,
+                         width = 2,
+                         side = "left"),
+         Year = as.character(Year),
+         Year_Month = str_c(Year, Month, sep = "-"),
+         Time = ym(Year_Month))
+  }
+
+
+# Compute company trends 
+intuit_ratings_over_time <- intuit_reviews %>%
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Intuit")
+
+google_ratings_over_time <- google %>% 
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Google")
+
+salesforce_ratings_over_time <- salesforce %>% 
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Salesforce")
+
+microsoft_ratings_over_time <- microsoft %>% 
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Microsoft")
+
+facebook_ratings_over_time <- facebook %>% 
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Facebook")
+
+amazon_ratings_over_time <- amazon %>% 
+  compute_ratings_over_time_for_company() %>% 
+  mutate(Company = "Amazon")
+
+
+all_companies_ratings_over_time <- rbind(intuit_ratings_over_time,
+      google_ratings_over_time,
+      salesforce_ratings_over_time,
+      microsoft_ratings_over_time,
+      facebook_ratings_over_time,
+      amazon_ratings_over_time)
+
+```
+
+### vs. FB
+```{r graph v FB}
+## Graph
+ggplot(all_companies_ratings_over_time %>% 
+  select(Time, 
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating, 
+         Company) %>% 
+  pivot_longer(cols = ends_with("_rating"), 
+               names_to = "Category",
+               values_to = "Average Rating"
+               ) %>%
+         filter(Time >= one_year_ago) %>% 
+    mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "),
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work - Life Balance",
+             Category == "overall" ~ "Overall"
+           )) %>% 
+    filter(Company == "Intuit" | Company == "Facebook"), 
+       aes(x = Time, y = `Average Rating`, color = Company)
+       ) + 
+  geom_point(size = 3.5) + 
+  geom_line(size = 1.2) + 
+  # geom_text_repel(data = . %>% 
+  #              group_by(Company) %>%
+  #              filter(`Average Rating` == max(`Average Rating`)),
+  #            aes(label = sprintf('%0.1f', `Average Rating`), color = Company),
+  #            show.legend = FALSE, 
+  #            fontface = "bold",
+  #            nudge_y = 0.15,
+  #            segment.color = NA
+  #            ) + 
+  # geom_text_repel(data = . %>% 
+  #              group_by(Company) %>%
+  #              filter(`Average Rating` == min(`Average Rating`)),
+  #            aes(label = sprintf('%0.1f', `Average Rating`), color = Company),
+  #            show.legend = FALSE,
+  #            fontface = "bold",
+  #            nudge_y = -0.15,
+  #            segment.color = NA) + 
+  labs(x = "",
+       y = "Rating",
+       title = "Intuit vs. Facebook",
+       subtitle = MoM_ratings_trend_graphs_title
+       ) + 
+  scale_color_manual(values = c("Intuit" = "#365ebf",
+                                "Facebook" = "gray")
+                       ) + 
+  scale_fill_manual(values = c("Intuit" = "#365ebf",
+                               "Facebook" = "gray")
+                       ) + 
+  scale_x_date(
+               date_labels = "%b-%y"
+               ) + 
+  scale_y_continuous(
+                     limits = c(2.5, 4.8)
+                     ) +
+  facet_wrap(~ factor(Category, levels = c("Career Growth",
+                                           "Company Culture",
+                                           "Compensation/Benefits",
+                                           "Management",
+                                           "Work - Life Balance",
+                                           "Overall"))
+             ) +
+  theme_bw(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.spacing.x = unit(2, "lines"),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15),
+        strip.text = element_text(face = "bold", size = 13),
+        strip.background = element_rect(fill = "white", color = "transparent"),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(1, 'cm'), #change legend key height
+        legend.key.width = unit(1, 'cm') #change legend key width
+)
+
+```
+
+```{r export ratings change over time fb}
+ggsave(path = output_path,
+       filename = "Ratings_Change_Over_Time_vs_FB.png",
+       width = 15)
+```
+
+### vs Salesforce 
+
+```{r graph v Salesforce}
+## Graph
+ggplot(all_companies_ratings_over_time %>% 
+  select(Time, 
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating, 
+         Company) %>% 
+  pivot_longer(cols = ends_with("_rating"), 
+               names_to = "Category",
+               values_to = "Average Rating"
+               ) %>%
+         filter(Time >= one_year_ago) %>% 
+    mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "),
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work - Life Balance",
+             Category == "overall" ~ "Overall"
+           )) %>% 
+    filter(Company == "Intuit" | Company == "Salesforce"), 
+       aes(x = Time, y = `Average Rating`, color = Company)
+       ) + 
+  geom_point(size = 3.5) + 
+  geom_line(size = 1.2) + 
+  labs(x = "",
+       y = "Rating",
+       title = "Intuit vs. Salesforce",
+       subtitle = MoM_ratings_trend_graphs_title
+       ) + 
+  scale_color_manual(values = c("Intuit" = "#365ebf",
+                                "Salesforce" = "gray")
+                       ) + 
+  scale_fill_manual(values = c("Intuit" = "#365ebf",
+                               "Salesforce" = "gray")
+                       ) + 
+  scale_x_date(
+               date_labels = "%b-%y"
+               ) + 
+  scale_y_continuous(
+                     limits = c(2.5, 4.8)
+                     ) +
+  facet_wrap(~ factor(Category, levels = c("Career Growth",
+                                           "Company Culture",
+                                           "Compensation/Benefits",
+                                           "Management",
+                                           "Work - Life Balance",
+                                           "Overall"))
+             ) +
+  theme_bw(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.spacing.x = unit(2, "lines"),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15),
+        strip.text = element_text(face = "bold", size = 13),
+        strip.background = element_rect(fill = "white", color = "transparent"),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(1, 'cm'), #change legend key height
+        legend.key.width = unit(1, 'cm') #change legend key width
+)
+
+```
+
+```{r export ratings change over time salesforce}
+ggsave(path = output_path,
+       filename = "Ratings_Change_Over_Time_vs_Salesforce.png",
+       width = 15)
+```
+
+## vs Google
+
+```{r graph v Google}
+## Graph
+ggplot(all_companies_ratings_over_time %>% 
+  select(Time, 
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating, 
+         Company) %>% 
+  pivot_longer(cols = ends_with("_rating"), 
+               names_to = "Category",
+               values_to = "Average Rating"
+               ) %>%
+         filter(Time >= one_year_ago) %>% 
+    mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "),
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work - Life Balance",
+             Category == "overall" ~ "Overall"
+           )) %>% 
+    filter(Company == "Intuit" | Company == "Google"), 
+       aes(x = Time, y = `Average Rating`, color = Company)
+       ) + 
+  geom_point(size = 3.5) + 
+  geom_line(size = 1.2) + 
+  labs(x = "",
+       y = "Rating",
+       title = "Intuit vs. Google",
+       subtitle = MoM_ratings_trend_graphs_title
+       ) + 
+  scale_color_manual(values = c("Intuit" = "#365ebf",
+                                "Google" = "gray")
+                       ) + 
+  scale_fill_manual(values = c("Intuit" = "#365ebf",
+                               "Google" = "gray")
+                       ) + 
+  scale_x_date(
+               date_labels = "%b-%y"
+               ) + 
+  scale_y_continuous(
+                     limits = c(2.5, 4.8)
+                     ) +
+  facet_wrap(~ factor(Category, levels = c("Career Growth",
+                                           "Company Culture",
+                                           "Compensation/Benefits",
+                                           "Management",
+                                           "Work - Life Balance",
+                                           "Overall"))
+             ) +
+  theme_bw(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.spacing.x = unit(2, "lines"),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15),
+        strip.text = element_text(face = "bold", size = 13),
+        strip.background = element_rect(fill = "white", color = "transparent"),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(1, 'cm'), #change legend key height
+        legend.key.width = unit(1, 'cm') #change legend key width
+)
+
+```
+
+```{r export ratings change over time google}
+ggsave(path = output_path,
+       filename = "Ratings_Change_Over_Time_vs_Google.png",
+       width = 15)
+```
+
+### Microsoft
+
+```{r graph v Microsoft}
+## Graph
+ggplot(all_companies_ratings_over_time %>% 
+  select(Time, 
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating, 
+         Company) %>% 
+  pivot_longer(cols = ends_with("_rating"), 
+               names_to = "Category",
+               values_to = "Average Rating"
+               ) %>%
+         filter(Time >= one_year_ago) %>% 
+    mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "),
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work - Life Balance",
+             Category == "overall" ~ "Overall"
+           )) %>% 
+    filter(Company == "Intuit" | Company == "Microsoft"), 
+       aes(x = Time, y = `Average Rating`, color = Company)
+       ) + 
+  geom_point(size = 3.5) + 
+  geom_line(size = 1.2) + 
+  labs(x = "",
+       y = "Rating",
+       title = "Intuit vs. Microsoft",
+       subtitle = MoM_ratings_trend_graphs_title
+       ) + 
+  scale_color_manual(values = c("Intuit" = "#365ebf",
+                                "Microsoft" = "gray")
+                       ) + 
+  scale_fill_manual(values = c("Intuit" = "#365ebf",
+                               "Microsoft" = "gray")
+                       ) + 
+  scale_x_date(
+               date_labels = "%b-%y"
+               ) + 
+  scale_y_continuous(
+                     limits = c(2.5, 4.8)
+                     ) +
+  facet_wrap(~ factor(Category, levels = c("Career Growth",
+                                           "Company Culture",
+                                           "Compensation/Benefits",
+                                           "Management",
+                                           "Work - Life Balance",
+                                           "Overall"))
+             ) +
+  theme_bw(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.spacing.x = unit(2, "lines"),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15),
+        strip.text = element_text(face = "bold", size = 13),
+        strip.background = element_rect(fill = "white", color = "transparent"),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(1, 'cm'), #change legend key height
+        legend.key.width = unit(1, 'cm') #change legend key width
+)
+
+```
+
+```{r export ratings change over time microsoft}
+ggsave(path = output_path,
+       filename = "Ratings_Change_Over_Time_vs_Microsoft.png",
+       width = 15)
+```
+
+### Amazon
+```{r graph v Amazon}
+## Graph
+ggplot(all_companies_ratings_over_time %>% 
+  select(Time, 
+         overall_rating,
+         career_growth_rating,
+         wlb_rating, 
+         compensation_rating,
+         company_culture_rating, 
+         management_rating, 
+         Company) %>% 
+  pivot_longer(cols = ends_with("_rating"), 
+               names_to = "Category",
+               values_to = "Average Rating"
+               ) %>%
+         filter(Time >= one_year_ago) %>% 
+    mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "),
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work - Life Balance",
+             Category == "overall" ~ "Overall"
+           )) %>% 
+    filter(Company == "Intuit" | Company == "Amazon"), 
+       aes(x = Time, y = `Average Rating`, color = Company)
+       ) + 
+  geom_point(size = 3.5) + 
+  geom_line(size = 1.2) + 
+  labs(x = "",
+       y = "Rating",
+       title = "Intuit vs. Amazon",
+       subtitle = MoM_ratings_trend_graphs_title
+       ) + 
+  scale_color_manual(values = c("Intuit" = "#365ebf",
+                                "Amazon" = "gray")
+                       ) + 
+  scale_fill_manual(values = c("Intuit" = "#365ebf",
+                               "Amazon" = "gray")
+                       ) + 
+  scale_x_date(
+               date_labels = "%b-%y"
+               ) + 
+  scale_y_continuous(
+                     limits = c(2.5, 4.8)
+                     ) +
+  facet_wrap(~ factor(Category, levels = c("Career Growth",
+                                           "Company Culture",
+                                           "Compensation/Benefits",
+                                           "Management",
+                                           "Work - Life Balance",
+                                           "Overall"))
+             ) +
+  theme_bw(base_size = 13) + 
+  theme(text = element_text(family = "Arial"),
+        panel.grid.minor.y = element_blank(),
+        panel.spacing.x = unit(2, "lines"),
+        panel.grid.minor.x = element_blank(),
+        legend.position = "top", 
+        legend.title = element_blank(),
+        plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
+        plot.subtitle = element_text(hjust = 0.5, size = 14, face = "bold"),
+        axis.title.x = element_text(size = 16, face = "bold"),
+        axis.title.y = element_text(size = 16, face = "bold",
+                                    margin = margin(t = 0, r = 20, b = 0, l = 0)
+                                    ),
+        axis.text.x = element_text(size = 14),
+        axis.text.y = element_text(size = 15),
+        strip.text = element_text(face = "bold", size = 13),
+        strip.background = element_rect(fill = "white", color = "transparent"),
+        legend.key.size = unit(1, 'cm'), #change legend key size
+        legend.key.height = unit(1, 'cm'), #change legend key height
+        legend.key.width = unit(1, 'cm') #change legend key width
+)
+
+```
+
+```{r export ratings change over time amazon}
+ggsave(path = output_path,
+       filename = "Ratings_Change_Over_Time_vs_Amazon.png",
+       width = 15)
+```
