@@ -29,7 +29,6 @@ libraries <- c("tidyverse",
                "rebus",
                "lubridate"
 )
-require(libraries)
 lapply(libraries, require, character.only = TRUE)
 
 # Set Key-Parameters

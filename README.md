@@ -1,2 +1,2 @@
 # blind_reviews
- contains scripts to scrape blind reviews and analyze.
+ contains scripts to scrape and analyze reviews on Blind.

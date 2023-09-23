@@ -1,0 +1,31 @@
+Category,Company,n,mean,sd
+Career Growth,Amazon,560,3.6,1.1
+Career Growth,Facebook,187,4,1
+Career Growth,Google,166,3.5,1
+Career Growth,Intuit,34,3.2,1.1
+Career Growth,Salesforce,57,3.5,1
+Company Culture,Amazon,560,3,1.2
+Company Culture,Facebook,187,3.5,1.2
+Company Culture,Google,166,4.3,0.8
+Company Culture,Intuit,34,3.9,0.8
+Company Culture,Salesforce,57,4.2,0.9
+Compensation/Benefits,Amazon,560,3.1,1
+Compensation/Benefits,Facebook,187,4.1,0.9
+Compensation/Benefits,Google,166,4,0.9
+Compensation/Benefits,Intuit,34,3.4,1
+Compensation/Benefits,Salesforce,57,3.6,0.9
+Management,Amazon,560,3.1,1.2
+Management,Facebook,187,3.3,1.2
+Management,Google,166,3.8,1
+Management,Intuit,34,3.4,1
+Management,Salesforce,57,3.5,1.1
+Overall,Amazon,560,3.5,1
+Overall,Facebook,187,3.8,0.9
+Overall,Google,166,4.3,0.7
+Overall,Intuit,34,3.8,0.8
+Overall,Salesforce,57,3.9,0.9
+Work-Life Balance,Amazon,560,2.9,1.2
+Work-Life Balance,Facebook,187,3.3,1.2
+Work-Life Balance,Google,166,4.5,0.8
+Work-Life Balance,Intuit,34,4.1,1
+Work-Life Balance,Salesforce,57,4.4,0.8

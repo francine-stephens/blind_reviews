@@ -20,7 +20,7 @@ The aim of this script is to:
 * Provide the number of reviews posted to Intuit's Blind page for the month.
 * Provide a breakdown of the review postings by employment status (current vs. former).
 * Report Intuit's scores on key categories of employee experience and show trends over time and comparisons to competitors. 
-* Show month over month trends in key category scores to compare time trends across the categories
+* Show month over month trends in key category scores to compare time trends
 
 
 ```{r setup, warning=FALSE, message=FALSE, include=TRUE}
@@ -39,39 +39,54 @@ libraries <- c("tidyverse",
                "sparkline"
                
 )
-require(libraries)
 lapply(libraries, require, character.only = TRUE)
 
 ## Set Paths
 wd <- getwd()
-output_path <- "/03-2022/"  #you want to write this to the monthly file you are working on
+output_path <- "/03-2022/"  #you want to write this to the monthly file
+dir.create(file.path(wd, output_path))
+
 
 # Set Key-Parameters
 #### Dates ####
 ## Update the start of month date & start of next month date
 month_start_reviews <- as.Date("2022-03-01")
-month_start_next_month <- as.Date("2022-04-01")
-
-## Set the date for Month Before Current Month you are analyzing
-month_previous_for_MOM_trend <- as.Date("2022-02-01")
-
-## Set the date for exactly 1 year ago to the current month (start of month)
+col_month_start <- paste0("T", month_start_reviews)
+month_start_next_month <- as.Date("2022-04-01") 
+month_previous_for_MOM_trend <- as.Date("2022-02-01") 
+col_month_prev <- paste0("T", month_previous_for_MOM_trend)
 one_year_ago <- as.Date("2021-03-01")
 
 #### Visual Elements ####
 ## Set the appropriate months for the line graphs
-MoM_ratings_trend_graphs_title <- "Monthly Blind Ratings: March 2021 - March 2022" 
+MoM_ratings_trend_graphs_title <- "Monthly Blind Ratings during the Last Year" 
 
 
 # Set Key Functions
-## Update the dates within the tick marks (i.e., ` `) to reflect the current month and last month
+label_score_categories <- function(x) { 
+  x %>%
+  mutate(Category = case_when(
+    Category == "overall_rating" ~ "Overall",
+    Category == "career_growth_rating" ~ "Career Growth",
+    Category == "wlb_rating" ~ "Work-Life Balance", 
+    Category == "compensation_rating" ~ "Compensation/Benefits",
+    Category == "company_culture_rating" ~ "Company Culture", 
+    Category == "management_rating" ~ "Management")
+    )
+  }    
+
 compute_MOM_trend_for_table <- function(x) { 
   x %>% 
-  mutate(Change = `2022-03-01` - `2022-02-01`) %>% # current month - last month
-  select(Category, Rating = `2022-03-01`, Change) # current month in the tick marks on this line
-    }
+  mutate(Change = Current - Previous) %>% # current month - last month
+  select(Category, Rating = Current, Change) 
+}
+
+dev.new(family = "Arial")
+
+```
 
 
+```{r load data, echo=FALSE}
 ## Import Data
 temp_rds <- list.files(pattern="*.rds")
 list2env(
@@ -82,11 +97,10 @@ list2env(
 
 ## Overview of Data
 
-View the chunk below and make sure: 
-
-* You see the current month represented in the **Date_Obj** field. 
+View the chunk below and make sure that  the current month falls in the **Date_Obj** field. 
 ```{r reviews summary}
 summary(intuit_reviews)
+
 ```
 
 
@@ -95,7 +109,7 @@ summary(intuit_reviews)
 Check to see what is the breakdown for employment status in this month's reviews. You will need to specify this on the slides (e.g., reviews from # of current employees).
 ```{r employee status}
 knitr::kable(intuit_reviews %>% 
-  filter(Date_obj >= month_start_reviews) %>%
+  filter(Month == month(month_start_reviews) & Year == year(month_start_reviews)) %>%
   group_by(emp_status) %>% 
   count() %>% 
   ungroup() %>% 
@@ -110,11 +124,10 @@ knitr::kable(intuit_reviews %>%
 
 Calculate 1-Year MoM ratings trends and output the graph that goes on the second slide in the series of Blind slides. 
 
-*Note: For the graph, bear in mind that you may need to tweak the scaling when the magnitude of the ratings changes (i.e., you may need to expand to higher than 4.5 or lower than 2.8).*
-```{r avg rating per month}
-dev.new(family = "Arial")
-
+*Note: For the graph, bear in mind that you may need to tweak the scaling when the magnitude of the ratings changes (i.e., you may need to expand to higher than 5 or lower than 2.8).*
+```{r avg rating per month, message=FALSE, warning=FALSE}
 ratings_over_time <- intuit_reviews %>%
+  filter(Date_obj >= one_year_ago & Date_obj < month_start_next_month) %>%
   select(Month,
          Year,
          overall_rating,
@@ -127,7 +140,8 @@ ratings_over_time <- intuit_reviews %>%
   summarize(across(ends_with("_rating"), ~mean(.x, na.rm = TRUE))
             ) %>% 
   ungroup() %>% 
-  mutate(across(ends_with("_rating"), ~round(.x, digits = 1))) %>% 
+  mutate(across(ends_with("_rating"), ~round(.x, digits = 1))
+         ) %>% 
   mutate(Month = as.character(Month),
          Month = str_pad(Month,
                          width = 2,
@@ -136,7 +150,7 @@ ratings_over_time <- intuit_reviews %>%
          Year_Month = str_c(Year, Month, sep = "-"),
          Time = ym(Year_Month)) 
 
-ggplot(ratings_over_time %>% 
+MoM_ratings_year <- ratings_over_time %>% 
   select(Time, 
          overall_rating,
          career_growth_rating,
@@ -158,7 +172,9 @@ ggplot(ratings_over_time %>%
              Category == "management" ~ "Management",
              Category == "wlb" ~ "Work - Life Balance",
              Category == "overall" ~ "Overall"
-           )), 
+           ))
+
+ggplot(MoM_ratings_year, 
        aes(x = Time, y = `Average Rating`, color = Category)
        ) + 
   geom_line(size = 1.2) + 
@@ -168,7 +184,6 @@ ggplot(ratings_over_time %>%
                filter(`Average Rating` == max(`Average Rating`)),
              aes(label = sprintf('%0.1f', `Average Rating`), color = Category),
              show.legend = FALSE, 
-             #colour = "white", 
              fontface = "bold",
              nudge_y = 0.15,
              segment.color = NA
@@ -198,12 +213,8 @@ ggplot(ratings_over_time %>%
                                 "Work - Life Balance" = "#ffa600",
                                 "Overall" = "#686868")
                        ) + 
-  scale_x_date(
-               date_labels = "%b-%y"
-               ) + 
-  scale_y_continuous(
-                     limits = c(2.8, 4.5)
-                     ) +
+  scale_x_date(date_labels = "%b-%y") + 
+  scale_y_continuous(limits = c(2.5, 5)) +
   facet_wrap(~ factor(Category, levels = c("Career Growth",
                                            "Company Culture",
                                            "Compensation/Benefits",
@@ -216,7 +227,7 @@ ggplot(ratings_over_time %>%
         panel.grid.minor.y = element_blank(),
         panel.spacing.x = unit(2, "lines"),
         panel.grid.minor.x = element_blank(),
-        legend.position = "top", 
+        legend.position = "none", 
         legend.title = element_blank(),
         plot.title = element_text(size = 18, face = "bold", hjust = 0.5), 
         axis.title.x = element_text(size = 16, face = "bold"),
@@ -229,94 +240,59 @@ ggplot(ratings_over_time %>%
         strip.background = element_rect(fill = "white", color = "transparent")
 )
 
+```
+
+```{r}
 ggsave(path = paste0(wd, output_path),
        filename = "Ratings_Change_Over_Time.png",
        width = 15)
 
 ```
 
-```{r, echo=FALSE, out.width="75%"}
-knitr::include_graphics(path = paste0(wd, output_path, "Ratings_Change_Over_Time.png"))
-```
 
 ## Build Ratings Table
 
 **Compute Last Month's Ratings for Competitors**
 ```{r calculate ratings for last month for competitors}
 
-amazon_ratings_last_month <- amazon %>% 
-  filter(Date_obj >= month_start_reviews,
+capture_competitors_monthly_ratings <- function(x, company) { 
+  x %>% 
+  filter(Date_obj >= month_start_reviews &
          Date_obj < month_start_next_month
          ) %>%
   summarize(across(ends_with("_rating"), ~mean(.x, na.rm=TRUE))) %>%
    pivot_longer(cols = ends_with("_rating"),
                names_to = "Category",
-               values_to = "Amazon"
-               ) %>%
-  mutate(Amazon = round(Amazon, digits=1)) %>%
-  select(-Category)
+               values_to = company
+               )
+  }
 
-salesforce_ratings_last_month <- salesforce %>% 
-  filter(Date_obj >= month_start_reviews,
-         Date_obj < month_start_next_month
-         ) %>%
-  summarize(across(ends_with("_rating"), ~mean(.x, na.rm=TRUE))) %>%
-   pivot_longer(cols = ends_with("_rating"),
-               names_to = "Category",
-               values_to = "Salesforce"
-               ) %>%
-  mutate(Salesforce = round(Salesforce, digits=1)) %>%
-  select(-Category)
+amazon_ratings_last_month <- capture_competitors_monthly_ratings(
+  amazon, "Amazon") 
 
-google_ratings_last_month <- 
-  google %>% 
-  filter(Date_obj >= month_start_reviews,
-         Date_obj < month_start_next_month
-         ) %>%
-  summarize(across(ends_with("_rating"), ~mean(.x, na.rm=TRUE))) %>%
-   pivot_longer(cols = ends_with("_rating"),
-               names_to = "Category",
-               values_to = "Google"
-               ) %>%
-  mutate(Google = round(Google, digits=1))
+salesforce_ratings_last_month <- capture_competitors_monthly_ratings(
+  salesforce, "Salesforce") 
 
-facebook_ratings_last_month <- facebook %>% 
-  filter(Date_obj >= month_start_reviews,
-         Date_obj < month_start_next_month
-         ) %>%
-  summarize(across(ends_with("_rating"), ~mean(.x, na.rm=TRUE))) %>%
-   pivot_longer(cols = ends_with("_rating"),
-               names_to = "Category",
-               values_to = "Facebook"
-               ) %>%
-  mutate(Facebook = round(Facebook, digits=1)) %>%
-  select(-Category)
+google_ratings_last_month <- capture_competitors_monthly_ratings(
+  google, "Google")
+  
+facebook_ratings_last_month <- capture_competitors_monthly_ratings(
+  facebook, "Facebook")
 
-microsoft_ratings_last_month <- microsoft %>% 
-  filter(Date_obj >= month_start_reviews,
-         Date_obj < month_start_next_month
-         ) %>%
-  summarize(across(ends_with("_rating"), ~mean(.x, na.rm=TRUE))) %>%
-   pivot_longer(cols = ends_with("_rating"),
-               names_to = "Category",
-               values_to = "Microsoft"
-               ) %>%
-  mutate(Microsoft = round(Microsoft, digits=1)) %>%
-  select(-Category)
+microsoft_ratings_last_month <- capture_competitors_monthly_ratings(
+  microsoft, "Microsoft")
 
-competitors_ratings <- cbind(google_ratings_last_month,
-      facebook_ratings_last_month,
-      amazon_ratings_last_month,
-      microsoft_ratings_last_month,
-      salesforce_ratings_last_month) %>% 
-  mutate(Category = case_when(
-    Category == "overall_rating" ~ "Overall",
-    Category == "career_growth_rating" ~ "Career Growth",
-    Category == "wlb_rating" ~ "Work-Life Balance", 
-    Category == "compensation_rating" ~ "Compensation/Benefits",
-    Category == "company_culture_rating" ~ "Company Culture", 
-    Category == "management_rating" ~ "Management")
-    ) 
+competitors_list <- list(google_ratings_last_month, 
+                         facebook_ratings_last_month,
+                         amazon_ratings_last_month,
+                         microsoft_ratings_last_month,
+                         salesforce_ratings_last_month
+                         )
+  
+competitors_ratings <- competitors_list %>% 
+  reduce(inner_join, by= "Category")  %>%
+  mutate(across(where(is.numeric), ~round(.x, digits = 1))) %>% 
+  label_score_categories()
 
 knitr::kable(competitors_ratings,
              caption = "Summary of Last Month's Ratings for Competitors")
@@ -338,18 +314,14 @@ vs_last_month_by_category <- ratings_over_time %>%
                names_to = "Category",
                values_to = "Average Rating"
                ) %>% 
+  mutate(Time = paste0("T", Time), 
+         Time = ifelse(Time == col_month_start, "Current", "Previous")
+         ) %>% 
   pivot_wider(id_cols = Category, 
               names_from = Time, 
               values_from = `Average Rating`) %>% 
-  compute_MOM_trend_for_table %>% 
-  mutate(Category = case_when(
-    Category == "overall_rating" ~ "Overall",
-    Category == "career_growth_rating" ~ "Career Growth",
-    Category == "wlb_rating" ~ "Work-Life Balance", 
-    Category == "compensation_rating" ~ "Compensation/Benefits",
-    Category == "company_culture_rating" ~ "Company Culture", 
-    Category == "management_rating" ~ "Management")
-    ) %>% 
+  compute_MOM_trend_for_table() %>% 
+  label_score_categories() %>% 
   select(Category, Change)
 
 data_for_table <- intuit_reviews %>% 
@@ -370,14 +342,7 @@ data_for_table <- intuit_reviews %>%
                names_to = "Category",
                values_to = "Rating"
                ) %>% 
-  mutate(Category = case_when(
-    Category == "overall_rating" ~ "Overall",
-    Category == "career_growth_rating" ~ "Career Growth",
-    Category == "wlb_rating" ~ "Work-Life Balance", 
-    Category == "compensation_rating" ~ "Compensation/Benefits",
-    Category == "company_culture_rating" ~ "Company Culture", 
-    Category == "management_rating" ~ "Management")
-    ) %>% 
+  label_score_categories() %>% 
   left_join(., vs_last_month_by_category, by = "Category") %>% 
   left_join(., competitors_ratings, by = "Category") %>% 
   mutate(Google = Rating - Google,
@@ -407,7 +372,7 @@ last_year_month_month_ratings <- ratings_over_time %>%
          filter(Time >= one_year_ago & 
                   Time < month_start_next_month) %>% 
     mutate(Category = str_remove(Category, "_rating"),
-           Category = str_replace_all(Category, "_", " "),
+           Category = str_replace_all(Category, "_", " "), 
            Category = case_when(
              Category == "career growth" ~ "Career Growth",
              Category == "company culture" ~ "Company Culture",
@@ -415,9 +380,9 @@ last_year_month_month_ratings <- ratings_over_time %>%
              Category == "management" ~ "Management",
              Category == "wlb" ~ "Work-Life Balance",
              Category == "overall" ~ "Overall"
-           )) %>% 
-  arrange(Time) %>% 
-  rename(Rating = `Average Rating`)
+           )) %>%
+    arrange(Time) %>% 
+    rename(Rating = `Average Rating`)
 
 plot_spark <- function(data){
   data %>% 
@@ -463,13 +428,13 @@ gt_spark <- function(table_data, plot_col, data_col){
 
 **Create competitor buttons**
 ```{r create competitor buttons}
-## Functions to create buttons for Competitors
-add_google_color <- function(Google){
-      add_color <- if (Google == 0) {
+## Color & Style buttons based on Intuit's scores relative to competitors
+add_button_color_style <- function(company){
+      add_color <- if (company == 0) {
         "background: hsl(90, 0%, 81%); color: hsl(180, 0%, 25%);"
-      } else if (Google > 0) {
+      } else if (company > 0) {
         "background: hsl(230, 70%, 90%); color: hsl(230, 45%, 30%);"
-      } else if (Google <0) {
+      } else if (company < 0) {
         "background: hsl(350, 70%, 90%); color: hsl(350, 45%, 30%);"
       }
       div_out <- htmltools::div(
@@ -477,107 +442,31 @@ add_google_color <- function(Google){
           "display: inline-block; padding: 2px 12px; border-radius: 15px; font-weight: 600; font-size: 12px;",
           add_color
           ),
-        paste(Google)
+        paste(company)
       )
       
       as.character(div_out) %>% 
         gt::html()
-}
-
-add_fb_color <- function(Facebook){
-      add_color <- if (Facebook == 0) {
-        "background: hsl(90, 0%, 81%); color: hsl(180, 0%, 25%);"
-      } else if (Facebook > 0) {
-        "background: hsl(230, 70%, 90%); color: hsl(230, 45%, 30%);"
-      } else if (Facebook <0) {
-        "background: hsl(350, 70%, 90%); color: hsl(350, 45%, 30%);"
-      }
-      div_out <- htmltools::div(
-        style = paste(
-          "display: inline-block; padding: 2px 12px; border-radius: 15px; font-weight: 600; font-size: 12px;",
-          add_color
-          ),
-        paste(Facebook)
-      )
-      
-      as.character(div_out) %>% 
-        gt::html()
-}
-
-add_amazon_color <- function(Amazon){
-      add_color <- if (Amazon == 0) {
-        "background: hsl(90, 0%, 81%); color: hsl(180, 0%, 25%);"
-      } else if (Amazon > 0) {
-        "background: hsl(230, 70%, 90%); color: hsl(230, 45%, 30%);"
-      } else if (Amazon <0) {
-        "background: hsl(350, 70%, 90%); color: hsl(350, 45%, 30%);"
-      }
-      div_out <- htmltools::div(
-        style = paste(
-          "display: inline-block; padding: 2px 12px; border-radius: 15px; font-weight: 600; font-size: 12px;",
-          add_color
-          ),
-        paste(Amazon)
-      )
-      
-      as.character(div_out) %>% 
-        gt::html()
-}
-
-add_microsoft_color <- function(Microsoft){
-      add_color <- if (Microsoft == 0) {
-        "background: hsl(90, 0%, 81%); color: hsl(180, 0%, 25%);"
-      } else if (Microsoft > 0) {
-        "background: hsl(230, 70%, 90%); color: hsl(230, 45%, 30%);"
-      } else if (Microsoft <0) {
-        "background: hsl(350, 70%, 90%); color: hsl(350, 45%, 30%);"
-      }
-      div_out <- htmltools::div(
-        style = paste(
-          "display: inline-block; padding: 2px 12px; border-radius: 15px; font-weight: 600; font-size: 12px;",
-          add_color
-          ),
-        paste(Microsoft)
-      )
-      
-      as.character(div_out) %>% 
-        gt::html()
-}      
-      
-add_salesforce_color <- function(Salesforce){
-      add_color <- if (Salesforce == 0) {
-        "background: hsl(90, 0%, 81%); color: hsl(180, 0%, 25%);"
-      } else if (Salesforce > 0) {
-        "background: hsl(230, 70%, 90%); color: hsl(230, 45%, 30%);"
-      } else if (Salesforce <0) {
-        "background: hsl(350, 70%, 90%); color: hsl(350, 45%, 30%);"
-      }
-      div_out <- htmltools::div(
-        style = paste(
-          "display: inline-block; padding: 2px 12px; border-radius: 15px; font-weight: 600; font-size: 12px;",
-          add_color
-          ),
-        paste(Salesforce)
-      )
-      
-      as.character(div_out) %>% 
-        gt::html()      
 }
 
 ```
 
 ```{r bring together table elements and export}
 # Build and Export Table
-data_for_table %>% 
-  mutate(Google = map(Google, add_google_color),
-         Facebook = map(Facebook, add_fb_color),
-         Amazon = map(Amazon, add_amazon_color),
-         Microsoft = map(Microsoft, add_microsoft_color),
-         Salesforce = map(Salesforce, add_salesforce_color)
-         ) %>% 
-  gt() %>% 
+data_for_table_styled <- data_for_table %>% 
+  mutate(Google = map(Google, add_button_color_style),
+         Facebook = map(Facebook, add_button_color_style),
+         Amazon = map(Amazon, add_button_color_style),
+         Microsoft = map(Microsoft, add_button_color_style),
+         Salesforce = map(Salesforce, add_button_color_style)
+         )
+  
+gt(data_for_table_styled) %>% 
+    tab_header(
+    title = md("Monthly Report on Blind Scalar Reviews")
+  ) %>%
     tab_spanner(Change:plot, label = "Trends") %>%
-    tab_spanner(Google:Salesforce, label = "vs Competitors") %>% 
+    tab_spanner(Google:Salesforce, label = "Intuit Score vs Competitors") %>% 
   text_transform(
     locations = cells_body(columns = c(Change)),
     fn = function(x){
@@ -630,3 +519,98 @@ if (x >= 0.1){
 ```{r, echo=FALSE, out.width="75%"}
 knitr::include_graphics(path = paste0(wd, output_path, "blind table.png"))
 ```
+
+## Pairwise T-Tests to compare Intuit's scores to Competitors
+
+Compute t-test comparisons for context. We are still working out whether to use hypothesis tests on these data.
+
+* If Intuit reviews are low for month then do not include in deck.
+* If Intuit reviews > 30 then ocnsider using, but include note on review counts in deck. 
+
+```{r pairwise ttests}
+add_company_name_filter_current <- function(x, company) { 
+  x %>% 
+    mutate(Company = company) %>% 
+    filter(Month == month(month_start_reviews) & Year == year(month_start_reviews))
+
+  }
+
+intuit_reviews_sig <- intuit_reviews %>% 
+  add_company_name_filter_current(., "Intuit")
+
+google_reviews_sig <- google %>% 
+  add_company_name_filter_current(., "Google")
+
+amazon_reviews_sig <- amazon %>% 
+  add_company_name_filter_current(., "Amazon")
+
+facebook_reviews_sig <- facebook %>% 
+  add_company_name_filter_current(., "Facebook")
+
+salesforce_reviews_sig <- salesforce %>% 
+  add_company_name_filter_current(., "Salesforce")
+
+
+data_for_sig_test <- rbind(intuit_reviews_sig, 
+                           google_reviews_sig, 
+                           amazon_reviews_sig, 
+                           facebook_reviews_sig, 
+                           salesforce_reviews_sig) %>% 
+
+  pivot_longer(., 
+               cols = c(overall_rating:management_rating),
+               names_to = "Category", 
+               values_to = "Rating") %>%
+  mutate(Category = str_remove(Category, "_rating"),
+           Category = str_replace_all(Category, "_", " "), 
+           Category = case_when(
+             Category == "career growth" ~ "Career Growth",
+             Category == "company culture" ~ "Company Culture",
+             Category == "compensation" ~ "Compensation/Benefits", 
+             Category == "management" ~ "Management",
+             Category == "wlb" ~ "Work-Life Balance",
+             Category == "overall" ~ "Overall"
+           ))
+  
+summary_stats_by_category_company <- data_for_sig_test %>% 
+  select(Category, Company, Rating) %>%
+  group_by(Category, Company) %>% 
+  summarise(
+    n = n(),
+    mean = mean(Rating),
+    sd = sd(Rating)
+  ) %>%
+  ungroup() %>% 
+  mutate(across(where(is.numeric), ~round(.x, digits = 1)))     
+  
+
+ratings_ttest <- data_for_sig_test %>% 
+  group_by(Category) %>%
+  rstatix::pairwise_t_test(Rating ~ Company, 
+                           ref.group = c("Intuit"),
+                           p.adjust.method = "bonferroni") %>% 
+  ungroup()
+
+
+```
+
+
+```{r ttest results}
+ratings_ttest
+
+```
+
+```{r summary stats intuit and competitors}
+summary_stats_by_category_company
+
+```
+
+**Export pairwise comparison t-test as csv files**
+```{r}
+write_csv(ratings_ttest, 
+          paste0(wd, output_path, "ratings_ttest.csv"))
+
+write_csv(summary_stats_by_category_company, 
+          paste0(wd, output_path, "ratings_summary_stats.csv"))
+```
+

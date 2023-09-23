@@ -2,7 +2,7 @@
 
 ## Overview & Getting Started
 
-#The script contains functions to perform the following steps:
+# The script contains functions to perform the following steps:
 
 # * Find the maximum number of pages to be queried on Blind.
 # * Generate all the sub-pages that make up the reviews
@@ -14,9 +14,11 @@
 
 ################################################################################
 ## Step 1
-# **Write Functions to Extract key Information from Each Field of the Review**
+# **Extract key Information from Each Field of the Review**
 #   
-# Rely on developer tools, i.e., inspect option when right clicking on feature on webpage, to find the html tag that contains the piece of the review you want to extract. 
+# Rely on developer tools.
+# Use the inspect option when right clicking on feature on webpage
+# to find the html tag that contains the piece of the review you want to extract. 
 # 
 # The pieces of the review that we care about are AND can scrape: 
 #   
@@ -24,8 +26,6 @@
 # - Reviewer's job title
 # - Review ratings
 
-
-# Define functions that extract the key pieces of the review
 
 ## Title
 get_review_title <- function(html){
@@ -67,7 +67,7 @@ get_reviews <- function(html){
 
 ## Step 2
 
-#*Scrape Website*
+# Scrape Website
 
 get_data_table <- function(html){
   
@@ -77,7 +77,7 @@ get_data_table <- function(html){
   reviews <- get_reviews(html)
   
   
-  # Combine into a tibble
+  # Combine all info
   combined_data <- tibble(
     reviewer = review_info,
     title = title,
@@ -94,8 +94,7 @@ get_data_from_url <- function(url){
 
 scrape_write_table <- function(url){
   
-  # Apply the extraction and bind the individual results back into one table, 
-  # which is then written as a tsv file into the working directory
+  # Apply the extraction functions and bind the results into one table 
   list_of_pages %>% 
     # Apply to all URLs
     map(get_data_from_url) %>%  
@@ -109,7 +108,7 @@ scraped_data <- scrape_write_table(url)
 ################################################################################
 ## Step 3 
 
-#*Create a clean data table & Export for Analysis**
+# Create a clean data table & Export for Analysis
 clean_scraped_data <- function(x) {
   x %>%
     mutate(
