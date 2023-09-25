@@ -26,6 +26,13 @@
 # - Reviewer's job title
 # - Review ratings
 
+## Trim white space and convert extracted information to vectors
+trim_and_unlist <- function(x) { 
+  x %>% 
+  str_trim() %>%                       
+  unlist() 
+  }
+
 
 ## Title
 get_review_title <- function(html){
@@ -33,22 +40,16 @@ get_review_title <- function(html){
     # Specify the relevant tag
     html_nodes('.rvtit') %>%      
     html_text() %>% 
-    # Trim additional white space
-    str_trim() %>%                       
-    # Convert the list into a vector
-    unlist()                             
+    trim_and_unlist()
 }
 
 ## Reviewer Demographics (current/former; job title)
 get_reviewer_info <- function(html){
   html %>% 
-    # Specify the relevant tag for the node
     html_nodes('.auth') %>% 
     html_text() %>% 
-    str_trim() %>% 
     str_remove("Verified User") %>% 
-    str_trim() %>%
-    unlist()
+    trim_and_unlist()
 }
 
 ## Star-Ratings
@@ -57,10 +58,7 @@ get_reviews <- function(html){
     # Specify the relevant tag for the node
     html_nodes('.review_item_inr') %>%      
     html_text() %>% 
-    # Trim additional white space
-    str_trim() %>%  
-    # Convert the list into a vector
-    unlist()                             
+    trim_and_unlist()                          
 }
 
 ################################################################################
@@ -111,36 +109,24 @@ scraped_data <- scrape_write_table(url)
 # Create a clean data table & Export for Analysis
 clean_scraped_data <- function(x) {
   x %>%
+    # Ratings
     mutate(
-      #Overall Rating
       overall_rating = str_extract(review,
                                    "Rating Score[[:digit:]]" ),
-      overall_rating = str_remove(overall_rating,
-                                  "Rating Score"), 
-      #Career Growth
       career_growth_rating = str_extract(review, 
                                          "[[:digit:]]Career"),
-      career_growth_rating = str_extract(career_growth_rating, "[[:digit:]]"),
-      #WLB 
       wlb_rating = str_extract(review,
                                "[[:digit:]]Work - Life Balance"),
-      wlb_rating = str_extract(wlb_rating, 
-                               "[[:digit:]]"),
-      #Compensation / Benefits
       compensation_rating = str_extract(review, 
                                         "[[:digit:]]Compensation / Benefits"),
-      compensation_rating = str_extract(compensation_rating, 
-                                        "[[:digit:]]"),
-      #Company Culture
       company_culture_rating = str_extract(review,
                                            "[[:digit:]]Company"),
-      company_culture_rating = str_extract(company_culture_rating, 
-                                           "[[:digit:]]"),
-      #Management 
       management_rating = str_extract(review, 
-                                      "[[:digit:]]Management"),
-      management_rating = str_extract(management_rating, 
-                                      "[[:digit:]]"),
+                                      "[[:digit:]]Management")
+      ) %>% 
+    mutate(across(ends_with("_rating"), ~str_extract(.x, "[[:digit:]]"))) %>% 
+    mutate(across(ends_with("_rating"), ~as.numeric(.x))) %>% 
+    mutate(
       # Review Title
       title = str_remove(title, "“"),
       title = str_remove(title, "”"),
@@ -166,7 +152,6 @@ clean_scraped_data <- function(x) {
              company_culture_rating, 
              management_rating,
              title)  %>% 
-    mutate(across(ends_with("_rating"), ~as.numeric(.x))) %>% 
     separate(date,
              c("Month", "Day", "Year"),
              sep = " ",
@@ -178,7 +163,5 @@ clean_scraped_data <- function(x) {
     ) %>% 
     relocate(date, Date_obj) %>% 
     arrange(desc(Date_obj))
-  
-  
 }
 
