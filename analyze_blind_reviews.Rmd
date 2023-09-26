@@ -43,7 +43,7 @@ lapply(libraries, require, character.only = TRUE)
 
 ## Set Paths
 wd <- getwd()
-output_path <- "/03-2022/"  #you want to write this to the monthly file
+output_path <- "/03-2022-1/"  #you want to write this to the monthly file
 dir.create(file.path(wd, output_path))
 
 
@@ -60,7 +60,12 @@ one_year_ago <- as.Date("2021-03-01")
 #### Visual Elements ####
 ## Set the appropriate months for the line graphs
 MoM_ratings_trend_graphs_title <- "Monthly Blind Ratings during the Last Year" 
-
+color_scheme_categories <- c("Career Growth" = "#003f5c", 
+     "Company Culture" = "#58508d", 
+     "Compensation/Benefits" = "#bc5090", 
+     "Management" = "#ff6361", 
+     "Work-Life Balance" = "#ffa600", 
+     "Overall" = "#686868")
 
 # Set Key Functions
 label_score_categories <- function(x) { 
@@ -162,17 +167,8 @@ MoM_ratings_year <- ratings_over_time %>%
                names_to = "Category",
                values_to = "Average Rating"
                ) %>%
-         filter(Time >= one_year_ago) %>% 
-    mutate(Category = str_remove(Category, "_rating"),
-           Category = str_replace_all(Category, "_", " "),
-           Category = case_when(
-             Category == "career growth" ~ "Career Growth",
-             Category == "company culture" ~ "Company Culture",
-             Category == "compensation" ~ "Compensation/Benefits", 
-             Category == "management" ~ "Management",
-             Category == "wlb" ~ "Work - Life Balance",
-             Category == "overall" ~ "Overall"
-           ))
+  filter(Time >= one_year_ago) %>% 
+  label_score_categories()
 
 ggplot(MoM_ratings_year, 
        aes(x = Time, y = `Average Rating`, color = Category)
@@ -199,27 +195,15 @@ ggplot(MoM_ratings_year,
   labs(x = "",
        y = "Rating",
        title = MoM_ratings_trend_graphs_title) + 
-  scale_color_manual(values = c("Career Growth" = "#003f5c",
-                                "Company Culture" = "#58508d",
-                                "Compensation/Benefits" = "#bc5090",
-                                "Management" = "#ff6361",
-                                "Work - Life Balance" = "#ffa600",
-                                "Overall" = "#686868")
-                       ) + 
-  scale_fill_manual(values = c("Career Growth" = "#003f5c",
-                                "Company Culture" = "#58508d",
-                                "Compensation/Benefits" = "#bc5090",
-                                "Management" = "#ff6361",
-                                "Work - Life Balance" = "#ffa600",
-                                "Overall" = "#686868")
-                       ) + 
+  scale_color_manual(values = color_scheme_categories) + 
+  scale_fill_manual(values = color_scheme_categories) + 
   scale_x_date(date_labels = "%b-%y") + 
   scale_y_continuous(limits = c(2.5, 5)) +
   facet_wrap(~ factor(Category, levels = c("Career Growth",
                                            "Company Culture",
                                            "Compensation/Benefits",
                                            "Management",
-                                           "Work - Life Balance",
+                                           "Work-Life Balance",
                                            "Overall"))
              ) +
   theme_bw(base_size = 13) + 
@@ -369,18 +353,9 @@ last_year_month_month_ratings <- ratings_over_time %>%
                names_to = "Category",
                values_to = "Average Rating"
                ) %>%
-         filter(Time >= one_year_ago & 
+  filter(Time >= one_year_ago & 
                   Time < month_start_next_month) %>% 
-    mutate(Category = str_remove(Category, "_rating"),
-           Category = str_replace_all(Category, "_", " "), 
-           Category = case_when(
-             Category == "career growth" ~ "Career Growth",
-             Category == "company culture" ~ "Company Culture",
-             Category == "compensation" ~ "Compensation/Benefits", 
-             Category == "management" ~ "Management",
-             Category == "wlb" ~ "Work-Life Balance",
-             Category == "overall" ~ "Overall"
-           )) %>%
+  label_score_categories() %>%
     arrange(Time) %>% 
     rename(Rating = `Average Rating`)
 
@@ -527,7 +502,7 @@ Compute t-test comparisons for context. We are still working out whether to use 
 * If Intuit reviews are low for month then do not include in deck.
 * If Intuit reviews > 30 then ocnsider using, but include note on review counts in deck. 
 
-```{r pairwise ttests}
+```{r pairwise ttests, echo=FALSE}
 add_company_name_filter_current <- function(x, company) { 
   x %>% 
     mutate(Company = company) %>% 
@@ -547,6 +522,9 @@ amazon_reviews_sig <- amazon %>%
 facebook_reviews_sig <- facebook %>% 
   add_company_name_filter_current(., "Facebook")
 
+microsoft_reviews_sig <- facebook %>% 
+  add_company_name_filter_current(., "Microsoft")
+
 salesforce_reviews_sig <- salesforce %>% 
   add_company_name_filter_current(., "Salesforce")
 
@@ -555,22 +533,14 @@ data_for_sig_test <- rbind(intuit_reviews_sig,
                            google_reviews_sig, 
                            amazon_reviews_sig, 
                            facebook_reviews_sig, 
+                           microsoft_reviews_sig,
                            salesforce_reviews_sig) %>% 
 
   pivot_longer(., 
                cols = c(overall_rating:management_rating),
                names_to = "Category", 
                values_to = "Rating") %>%
-  mutate(Category = str_remove(Category, "_rating"),
-           Category = str_replace_all(Category, "_", " "), 
-           Category = case_when(
-             Category == "career growth" ~ "Career Growth",
-             Category == "company culture" ~ "Company Culture",
-             Category == "compensation" ~ "Compensation/Benefits", 
-             Category == "management" ~ "Management",
-             Category == "wlb" ~ "Work-Life Balance",
-             Category == "overall" ~ "Overall"
-           ))
+ label_score_categories()
   
 summary_stats_by_category_company <- data_for_sig_test %>% 
   select(Category, Company, Rating) %>%
@@ -596,12 +566,131 @@ ratings_ttest <- data_for_sig_test %>%
 
 
 ```{r ttest results}
-ratings_ttest
+ratings_ttest %>% 
+  filter(p.adj.signif != "ns") %>% 
+  group_by(Category) %>% 
+  summarize(sig_competitors = paste0(group2, collapse = ", ")
+            ) %>% 
+  ungroup()
 
 ```
 
 ```{r summary stats intuit and competitors}
-summary_stats_by_category_company
+# Identify Significant differences in table
+extract_competitors_sig_diff <- function(category) { 
+  ratings_ttest %>% 
+  filter(p.adj.signif != "ns" & Category == category) %>% 
+  mutate(group2 = paste0("mean_", group2)) %>%
+  pull(group2)
+  }
+career_growth_sig <- extract_competitors_sig_diff("Career Growth")
+
+company_culture_sig <- extract_competitors_sig_diff("Company Culture")
+
+compensation_sig <- extract_competitors_sig_diff("Compensation/Benefits")
+
+work_life_balance_sig <- extract_competitors_sig_diff("Work-Life Balance")
+
+overall_sig <- extract_competitors_sig_diff("Overall")
+
+# Label Table with Company Name & Sample Size
+intuit_title <- ratings_ttest %>% 
+  distinct(n1) %>% 
+  mutate(n1 = paste0("Intuit (N = ", n1, ")")) %>% 
+  pull()
+
+title_naming_competitors <- function(company) { 
+  ratings_ttest %>% 
+  filter(group2 == company) %>%
+  distinct(n2) %>% 
+  mutate(n2 = paste0(company, " (N = ", n2, ")")) %>% 
+  pull()
+}
+amazon_title <- title_naming_competitors("Amazon")
+facebook_title <- title_naming_competitors("Facebook")
+google_title <- title_naming_competitors("Google")
+microsoft_title <- title_naming_competitors("Microsoft")
+salesforce_title <- title_naming_competitors("Salesforce")
+
+
+summary_stats_by_category_company %>% 
+  pivot_wider(names_from = "Company", 
+              values_from = c(n, mean, sd)
+              ) %>% 
+  relocate(ends_with("_Intuit"), .after = "Category") %>% 
+  gt() %>% 
+  tab_style(style = list(
+            cell_text(weight = "bold")
+            
+          ),
+          locations = cells_body(
+            columns = one_of(career_growth_sig),
+            
+            rows = Category == "Career Growth"
+          )
+        ) %>%
+   tab_style(style = list(
+            cell_text(weight = "bold")
+            
+          ),
+          locations = cells_body(
+            columns = one_of(company_culture_sig),
+            
+            rows = Category == "Company Culture"
+          )
+        ) %>% 
+   tab_style(style = list(
+            cell_text(weight = "bold")
+            
+          ),
+          locations = cells_body(
+            columns = one_of(compensation_sig),
+            
+            rows = Category == "Compensation/Benefits"
+          )
+        ) %>% 
+  tab_style(style = list(
+            cell_text(weight = "bold")
+            
+          ),
+          locations = cells_body(
+            columns = one_of(work_life_balance_sig),
+            
+            rows = Category == "Work-Life Balance"
+          )
+        ) %>% 
+  tab_style(style = list(
+            cell_text(weight = "bold")
+            
+          ),
+          locations = cells_body(
+            columns = one_of(overall_sig),
+            
+            rows = Category == "Overall"
+          )
+        ) %>%  
+  tab_style(style = list(
+            cell_fill(color = "grey")
+            
+          ),
+          locations = cells_body(
+            columns = ends_with("_Intuit"),
+            rows = everything()
+          )
+        ) %>%  
+  tab_spanner(ends_with("Intuit"), label = intuit_title) %>%
+  tab_spanner(ends_with("Amazon"), label = amazon_title) %>% 
+  tab_spanner(ends_with("Facebook"), label = facebook_title) %>% 
+  tab_spanner(ends_with("Google"), label = google_title) %>% 
+  tab_spanner(ends_with("Microsoft"), label = microsoft_title) %>% 
+  tab_spanner(ends_with("Salesforce"), label = salesforce_title) %>% 
+  cols_hide(starts_with("n_")) %>%
+  cols_label(
+    starts_with("n_") ~ "N",
+    starts_with("mean_") ~ "Mean",
+    starts_with("sd_") ~ "SD"
+  ) 
+
 
 ```
 
