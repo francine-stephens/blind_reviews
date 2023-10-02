@@ -1,25 +1,31 @@
-Metric,.y.,group1,group2,n1,n2,p,p.signif,p.adj,p.adj.signif
-career_growth_rating,Rating,Intuit,Amazon,34,560,0.0303,*,0.121,ns
-career_growth_rating,Rating,Intuit,Facebook,34,187,4.18e-5,****,1.67e-4,***
-career_growth_rating,Rating,Intuit,Google,34,166,0.14,ns,0.558,ns
-career_growth_rating,Rating,Intuit,Salesforce,34,57,0.205,ns,0.821,ns
-company_culture_rating,Rating,Intuit,Amazon,34,560,2.52e-6,****,1.01e-5,****
-company_culture_rating,Rating,Intuit,Facebook,34,187,0.029,*,0.116,ns
-company_culture_rating,Rating,Intuit,Google,34,166,0.0565,ns,0.226,ns
-company_culture_rating,Rating,Intuit,Salesforce,34,57,0.292,ns,1,ns
-compensation_rating,Rating,Intuit,Amazon,34,560,0.106,ns,0.425,ns
-compensation_rating,Rating,Intuit,Facebook,34,187,3.01e-5,****,1.2e-4,***
-compensation_rating,Rating,Intuit,Google,34,166,3.86e-4,***,0.00154,**
-compensation_rating,Rating,Intuit,Salesforce,34,57,0.195,ns,0.781,ns
-management_rating,Rating,Intuit,Amazon,34,560,0.169,ns,0.678,ns
-management_rating,Rating,Intuit,Facebook,34,187,0.801,ns,1,ns
-management_rating,Rating,Intuit,Google,34,166,0.0296,*,0.118,ns
-management_rating,Rating,Intuit,Salesforce,34,57,0.482,ns,1,ns
-overall_rating,Rating,Intuit,Amazon,34,560,0.0267,*,0.107,ns
-overall_rating,Rating,Intuit,Facebook,34,187,0.975,ns,1,ns
-overall_rating,Rating,Intuit,Google,34,166,0.00767,**,0.0307,*
-overall_rating,Rating,Intuit,Salesforce,34,57,0.596,ns,1,ns
-wlb_rating,Rating,Intuit,Amazon,34,560,9.93e-9,****,3.97e-8,****
-wlb_rating,Rating,Intuit,Facebook,34,187,3.51e-4,***,0.0014,**
-wlb_rating,Rating,Intuit,Google,34,166,0.0396,*,0.158,ns
-wlb_rating,Rating,Intuit,Salesforce,34,57,0.15,ns,0.602,ns
+Category,.y.,group1,group2,n1,n2,p,p.signif,p.adj,p.adj.signif
+Career Growth,Rating,Intuit,Amazon,34,560,0.0283,*,0.142,ns
+Career Growth,Rating,Intuit,Facebook,34,187,3.32e-5,****,1.66e-4,***
+Career Growth,Rating,Intuit,Google,34,166,0.135,ns,0.674,ns
+Career Growth,Rating,Intuit,Microsoft,34,187,3.32e-5,****,1.66e-4,***
+Career Growth,Rating,Intuit,Salesforce,34,57,0.2,ns,0.998,ns
+Company Culture,Rating,Intuit,Amazon,34,560,3.38e-6,****,1.69e-5,****
+Company Culture,Rating,Intuit,Facebook,34,187,0.0313,*,0.156,ns
+Company Culture,Rating,Intuit,Google,34,166,0.0599,ns,0.3,ns
+Company Culture,Rating,Intuit,Microsoft,34,187,0.0313,*,0.156,ns
+Company Culture,Rating,Intuit,Salesforce,34,57,0.299,ns,1,ns
+Compensation/Benefits,Rating,Intuit,Amazon,34,560,0.103,ns,0.514,ns
+Compensation/Benefits,Rating,Intuit,Facebook,34,187,2.49e-5,****,1.24e-4,***
+Compensation/Benefits,Rating,Intuit,Google,34,166,3.37e-4,***,0.00168,**
+Compensation/Benefits,Rating,Intuit,Microsoft,34,187,2.49e-5,****,1.24e-4,***
+Compensation/Benefits,Rating,Intuit,Salesforce,34,57,0.191,ns,0.955,ns
+Management,Rating,Intuit,Amazon,34,560,0.173,ns,0.865,ns
+Management,Rating,Intuit,Facebook,34,187,0.803,ns,1,ns
+Management,Rating,Intuit,Google,34,166,0.031,*,0.155,ns
+Management,Rating,Intuit,Microsoft,34,187,0.803,ns,1,ns
+Management,Rating,Intuit,Salesforce,34,57,0.486,ns,1,ns
+Overall,Rating,Intuit,Amazon,34,560,0.0269,*,0.135,ns
+Overall,Rating,Intuit,Facebook,34,187,0.975,ns,1,ns
+Overall,Rating,Intuit,Google,34,166,0.00775,**,0.0387,*
+Overall,Rating,Intuit,Microsoft,34,187,0.975,ns,1,ns
+Overall,Rating,Intuit,Salesforce,34,57,0.597,ns,1,ns
+Work-Life Balance,Rating,Intuit,Amazon,34,560,1.25e-8,****,6.25e-8,****
+Work-Life Balance,Rating,Intuit,Facebook,34,187,3.89e-4,***,0.00195,**
+Work-Life Balance,Rating,Intuit,Google,34,166,0.0412,*,0.206,ns
+Work-Life Balance,Rating,Intuit,Microsoft,34,187,3.89e-4,***,0.00195,**
+Work-Life Balance,Rating,Intuit,Salesforce,34,57,0.154,ns,0.769,ns

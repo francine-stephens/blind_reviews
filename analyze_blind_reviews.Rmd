@@ -23,8 +23,8 @@ The aim of this script is to:
 * Show month over month trends in key category scores to compare time trends
 
 
-```{r setup, warning=FALSE, message=FALSE, include=TRUE}
-knitr::opts_chunk$set(echo=TRUE, warning=FALSE, message=FALSE)
+```{r setup, warning=FALSE, message=FALSE, results="hide"}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 
 # Load Libraries
 libraries <- c("tidyverse",
@@ -43,7 +43,7 @@ lapply(libraries, require, character.only = TRUE)
 
 ## Set Paths
 wd <- getwd()
-output_path <- "/03-2022-1/"  #you want to write this to the monthly file
+output_path <- "/03-2022/"  #you want to write this to the monthly file
 dir.create(file.path(wd, output_path))
 
 
@@ -91,7 +91,7 @@ dev.new(family = "Arial")
 ```
 
 
-```{r load data, echo=FALSE}
+```{r load data, message=FALSE, warning=FALSE, results="hide"}
 ## Import Data
 temp_rds <- list.files(pattern="*.rds")
 list2env(
@@ -362,7 +362,7 @@ ratings_ttest %>%
 
 ```
 
-```{r summary stats intuit and competitors}
+```{r summary stats intuit and competitors, out.width= "75%"}
 # Identify Significant differences in table
 extract_competitors_sig_diff <- function(category) { 
   ratings_ttest %>% 
@@ -457,7 +457,7 @@ summary_stats_by_category_company %>%
           )
         ) %>%  
   tab_style(style = list(
-            cell_fill(color = "grey")
+            cell_fill(color = "#D3D3D3")
             
           ),
           locations = cells_body(
@@ -467,16 +467,27 @@ summary_stats_by_category_company %>%
         ) %>%  
   tab_style(
     style = cell_borders(
-      sides = c("left", "right"),
+      sides = "right",
       color = "black",
       weight = px(1.5),
       style = "solid"
     ),
     locations = cells_body(
-      columns = ends_with("_Intuit"),
+      columns = ends_with("SD_Intuit"),
       rows = everything()
     )
   ) %>% 
+  tab_style(
+    style = cell_borders(
+      sides = "left",
+      color = "black",
+      weight = px(1.5),
+      style = "solid"
+      ),
+    locations = cells_body(
+    columns = ends_with("Mean_Intuit"),
+    rows = everything()
+  )) %>%
   tab_spanner(ends_with("Intuit"), label = intuit_title) %>%
   tab_spanner(ends_with("Amazon"), label = amazon_title) %>% 
   tab_spanner(ends_with("Facebook"), label = facebook_title) %>% 
