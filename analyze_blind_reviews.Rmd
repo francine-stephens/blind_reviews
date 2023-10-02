@@ -465,6 +465,18 @@ summary_stats_by_category_company %>%
             rows = everything()
           )
         ) %>%  
+  tab_style(
+    style = cell_borders(
+      sides = c("left", "right"),
+      color = "black",
+      weight = px(1.5),
+      style = "solid"
+    ),
+    locations = cells_body(
+      columns = ends_with("_Intuit"),
+      rows = everything()
+    )
+  ) %>% 
   tab_spanner(ends_with("Intuit"), label = intuit_title) %>%
   tab_spanner(ends_with("Amazon"), label = amazon_title) %>% 
   tab_spanner(ends_with("Facebook"), label = facebook_title) %>% 
